@@ -144,15 +144,15 @@ class HistoryPanel(ttk.Frame):
         self.history.heading("number", text="#")
         self.history.heading("name", text="Name")
         self.history.heading("target", text="Target")
-        self.history.heading("guess", text="Guessed")
+        self.history.heading("guess", text="Guess")
         self.history.heading("points", text="Points")
         self.history.heading("average", text="Average")
 
         #configure columns
         self.history.column("number", width=40, minwidth=40)
         self.history.column("name", width=150, minwidth=150)
-        self.history.column("target", width=60, minwidth=60)
-        self.history.column("guess", width=60, minwidth=60)
+        self.history.column("target", width=70, minwidth=70)
+        self.history.column("guess", width=70, minwidth=70)
         self.history.column("points", width=60, minwidth=60, anchor="e")
         self.history.column("average", width=60, minwidth=60, anchor="e")
         self.history.pack(side="left", fill="y", pady=5)
@@ -184,7 +184,7 @@ class ResultWindow(ttk.Frame):
         self.feedback_label.pack()
 
         self.target_color_label = ttk.Label(self, style="TLabel")
-        self.target_color_label.pack()
+        self.target_color_label.pack(padx=5)
 
         self.preview_frame = ttk.Frame(self, style="ResultPreview.TFrame", width=350, height=350)
         self.preview_frame.pack(padx=15, pady=15)
