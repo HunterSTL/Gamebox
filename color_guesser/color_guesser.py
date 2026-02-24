@@ -4,11 +4,6 @@ from tkinter import colorchooser, messagebox
 from colors import COLOR_DICTIONARY, BACKGROUND_COLOR
 from ui_components import MainWindow, ResultWindow, define_style
 
-def choose_random_color() -> tuple[str, str]:
-    """return (color_name, hex_code)"""
-    choice = random.choice(list(COLOR_DICTIONARY.items()))
-    return choice[0], choice[1]
-
 def color_hex_to_rgb(color_hex: str) -> tuple[int, int, int]:
     red = int(color_hex[1:3], 16)   #"#abcdef" → ab → 171
     green = int(color_hex[3:5], 16) #"#abcdef" → cd → 205
@@ -30,23 +25,29 @@ def evaluate_similarity(color_to_guess_hex: str, guessed_color_hex: str) -> floa
     return 1 - diff_total / 765
 
 def score_to_adjective(score: float) -> str:
-    adjectives = [
-        "Perfect", "Exceptional", "Outstanding", "Fantastic",
-        "Excellent", "Great", "Strong", "Good",
-        "Solid", "Decent", "Reasonable", "Acceptable",
-        "Mediocre", "Underwhelming", "Weak", "Poor",
-        "Bad", "Very bad", "Terrible", "Abysmal"
+    adjectives_worst_to_best = [
+        "Abysmal", "Terrible", "Very bad", "Bad",
+        "Poor", "Weak", "Underwhelming", "Mediocre",
+        "Acceptable", "Reasonable", "Decent", "Solid",
+        "Good", "Strong", "Excellent", "Fantastic",
+        "Outstanding", "Exceptional", "Perfect"
     ]
-    max_index = len(adjectives) - 1
-    index = int(max_index * (1 - score))
-    return adjectives[index]
+    max_index = len(adjectives_worst_to_best) - 1
+    index = int(max_index * (score))
+    return adjectives_worst_to_best[index]
 
 class ColorGuesser:
     def __init__(self, root: tk.Tk):
         self.root = root
 
-        #target color (name + hex) and guessed color (hex)
-        self.target_color_name, self.target_color_hex = choose_random_color()
+        #remaining color to pick from to ensure that the same color isn't picked twice
+        #[("red", "#ff0000"), ("green", "#00ff00"), ...]
+        self.remaining_colors = self.fresh_color_dictionary()
+
+        #draw the first target color (name and hex value)
+        self.draw_next_target_color()
+
+        #user's current guess (hex value)
         self.guessed_color_hex = None
 
         #history of past guesses (points only)
@@ -59,6 +60,19 @@ class ColorGuesser:
 
         #result window
         self.result_window_top = None
+
+    @staticmethod
+    def fresh_color_dictionary() -> list[tuple[str, str]]:
+        return list(COLOR_DICTIONARY.items())
+
+    def draw_next_target_color(self):
+        #draw a random color from the remaining colors
+        index = random.randint(0, len(self.remaining_colors) - 1)
+        self.target_color_name, self.target_color_hex = self.remaining_colors.pop(index)
+
+        #repopulate remaining colors if all colors have been used
+        if not self.remaining_colors:
+            self.remaining_colors = self.fresh_color_dictionary()
 
     def select_color(self):
         color = colorchooser.askcolor()[1]
@@ -111,12 +125,13 @@ class ColorGuesser:
 
     def reset_game(self):
         #destroy result window
-        self.result_window_top.destroy()
-        self.result_window_top = None
+        if self.result_window_top:
+            self.result_window_top.destroy()
+            self.result_window_top = None
 
         #reset model
         self.guessed_color_hex = None
-        self.target_color_name, self.target_color_hex = choose_random_color()
+        self.draw_next_target_color()
 
         #reset UI
         self.main_window.guess_panel.target_color_label.config(text=self.target_color_name)
