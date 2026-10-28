@@ -1,4 +1,4 @@
-COLOR_DICTIONARY = {
+{
 	"Absolute Zero": "#0048BA",
 	"Acid green": "#B0BF1A",
 	"Aero": "#7CB9E8",
@@ -583,7 +583,6 @@ COLOR_DICTIONARY = {
 	"Pictorial carmine": "#C30B4E",
 	"Piggy pink": "#FDDDE6",
 	"Pine green": "#01796F",
-	"Pine green": "#2A2F23",
 	"Pink": "#FFC0CB",
 	"Pink (Pantone)": "#D74894",
 	"Pink lace": "#FFDDF4",
@@ -624,7 +623,7 @@ COLOR_DICTIONARY = {
 	"Raisin black": "#242124",
 	"Rajah": "#FBAB60",
 	"Raspberry": "#E30B5D",
-	"Raspberry glacÃ©": "#915F6D",
+	"Raspberry glacé": "#915F6D",
 	"Raspberry rose": "#B3446C",
 	"Raw sienna": "#D68A59",
 	"Raw umber": "#826644",
@@ -841,7 +840,6 @@ COLOR_DICTIONARY = {
 	"Venetian red": "#C80815",
 	"Verdigris": "#43B3AE",
 	"Vermilion": "#E34234",
-	"Vermilion": "#D9381E",
 	"Veronica": "#A020F0",
 	"Violet": "#8000FF",
 	"Electric Violet (RGB)": "#8F00FF",
@@ -903,5 +901,3 @@ COLOR_DICTIONARY = {
 	"Zinzolin": "#6C0277",
 	"Zomp": "#39A78E"
 }
-
-BACKGROUND_COLOR = "#404040"

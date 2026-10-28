@@ -1,144 +1,245 @@
+import json
 import random
 import tkinter as tk
-from tkinter import colorchooser, messagebox
-from colors import COLOR_DICTIONARY, BACKGROUND_COLOR
-from ui_components import MainWindow, ResultWindow, define_style
+from tkinter import ttk, colorchooser, messagebox
+from utility import evaluate_color_similarity, score_to_adjective, force_dark_title_bar
 
-def color_hex_to_rgb(color_hex: str) -> tuple[int, int, int]:
-    red = int(color_hex[1:3], 16)   #"#abcdef" → ab → 171
-    green = int(color_hex[3:5], 16) #"#abcdef" → cd → 205
-    blue = int(color_hex[5:7], 16)  #"#abcdef" → ef → 239
-    return red, green, blue
+BG_COLOR = "#404040"
+BUTTON_COLOR = "#505050"
+TEXT_COLOR = "#FFFFFF"
+PREVIEW_BORDER_COLOR = "#AAAAAA"
 
-def evaluate_similarity(color_to_guess_hex: str, guessed_color_hex: str) -> float:
-    #convert hex value to RGB values (#abcdef → 171, 205, 239)
-    target_red, target_green, target_blue = color_hex_to_rgb(color_to_guess_hex)
-    guess_red, guess_green, guess_blue = color_hex_to_rgb(guessed_color_hex)
-
-    #compute the absolute difference for each color chanel
-    diff_red = abs(target_red - guess_red)
-    diff_green = abs(target_green - guess_green)
-    diff_blue = abs(target_blue - guess_blue)
-    diff_total = diff_red + diff_green + diff_blue
-
-    #convert the total difference (best: 0 - worst: 765) to points (best: 1.0 - worst: 0.0)
-    return 1 - diff_total / 765
-
-def score_to_adjective(score: float) -> str:
-    adjectives_worst_to_best = [
-        "Abysmal", "Terrible", "Very bad", "Bad",
-        "Poor", "Weak", "Underwhelming", "Mediocre",
-        "Acceptable", "Reasonable", "Decent", "Solid",
-        "Good", "Strong", "Excellent", "Fantastic",
-        "Outstanding", "Exceptional", "Perfect"
-    ]
-    max_index = len(adjectives_worst_to_best) - 1
-    index = int(max_index * (score))
-    return adjectives_worst_to_best[index]
 
 class ColorGuesser:
-    def __init__(self, root: tk.Tk):
-        self.root = root
+    def __init__(
+        self,
+        root: tk.Tk
+    ) -> None:
+        self._root: tk.Tk = root
+        self._root.title("Color Guesser")
+        self._root.configure(bg=BG_COLOR)
+        force_dark_title_bar(window=self._root)
 
-        #remaining color to pick from to ensure that the same color isn't picked twice
-        #[("red", "#ff0000"), ("green", "#00ff00"), ...]
-        self.remaining_colors = self.fresh_color_dictionary()
+        # Game state
+        self._remaining_color_pool: dict[str, str] = {}
+        self._target_color_name: str | None = None
+        self._target_color_hex: str | None = None
+        self._guess_color_hex: str | None = None
+        self._guess_count: int = 0
+        self._guess_points: int = 0
+        self._total_points: int = 0
+        self._guess_feedback: str = ""
 
-        #draw the first target color (name and hex value)
-        self.draw_next_target_color()
+        # UI
+        self._result_window: tk.Toplevel | None = None
+        self._target_color_label: tk.Label | None = None
+        self._guess_color_preview: tk.Frame | None = None
+        self._history_table: ttk.Treeview | None = None
 
-        #user's current guess (hex value)
-        self.guessed_color_hex = None
+        self._reset_color_pool()
+        self._draw_target_color()
+        self._build_user_interface()
 
-        #history of past guesses (points only)
-        self.point_history = []
+    def _reset_color_pool(
+        self
+    ) -> None:
+        with open("color_pool.json", "r") as file:
+            self._remaining_color_pool = json.load(file)
 
-        #UI
-        self.style = define_style(self.root)
-        self.main_window = MainWindow(self.root, self.style, self.select_color, self.confirm_selection)
-        self.main_window.guess_panel.target_color_label.config(text=self.target_color_name)
+    def _draw_target_color(
+        self
+    ) -> None:
+        self._target_color_name = random.choice(list(self._remaining_color_pool.keys()))
+        self._target_color_hex = self._remaining_color_pool.pop(self._target_color_name)
 
-        #result window
-        self.result_window_top = None
+        if not self._remaining_color_pool:
+            self._reset_color_pool()
 
-    @staticmethod
-    def fresh_color_dictionary() -> list[tuple[str, str]]:
-        return list(COLOR_DICTIONARY.items())
+    def _select_color(
+        self
+    ) -> None:
+        _, color_hex = colorchooser.askcolor()
 
-    def draw_next_target_color(self):
-        #draw a random color from the remaining colors
-        index = random.randint(0, len(self.remaining_colors) - 1)
-        self.target_color_name, self.target_color_hex = self.remaining_colors.pop(index)
+        if not color_hex:
+            return
 
-        #repopulate remaining colors if all colors have been used
-        if not self.remaining_colors:
-            self.remaining_colors = self.fresh_color_dictionary()
+        self._guess_color_preview.config(bg=color_hex)
+        self._guess_color_hex = color_hex
 
-    def select_color(self):
-        color = colorchooser.askcolor()[1]
-        if color:
-            self.main_window.guess_panel.update_preview(color)
-            self.guessed_color_hex = color
+    def _reset_game(
+        self
+    ) -> None:
+        if self._result_window:
+            self._result_window.destroy()
+            self._result_window = None
 
-    def confirm_selection(self):
-        if not self.guessed_color_hex:
+        self._guess_color_hex = None
+        self._guess_color_preview.config(bg=BG_COLOR)
+        self._draw_target_color()
+        self._target_color_label.config(text="Target: " + self._target_color_name)
+
+    def _build_user_interface(
+        self
+    ) -> None:
+        self._target_color_label = tk.Label(
+            master=self._root,
+            text="Target: " + self._target_color_name,
+            font=("Arial", 16),
+            bg=BG_COLOR,
+            fg=TEXT_COLOR
+        )
+        self._target_color_label.pack()
+
+        self._guess_color_preview = tk.Frame(
+            master=self._root,
+            bg=BG_COLOR,
+            height=200,
+            highlightbackground=PREVIEW_BORDER_COLOR,
+            highlightthickness=1
+        )
+        self._guess_color_preview.pack(padx=10, pady=5, fill="both")
+
+        button_frame = tk.Frame(
+            master=self._root,
+            bg=BG_COLOR
+        )
+        button_frame.pack(pady=5)
+
+        tk.Button(
+            master=button_frame,
+            text="Select",
+            bg=BUTTON_COLOR,
+            fg=TEXT_COLOR,
+            command=self._select_color
+        ).pack(side="left", padx=5)
+
+        tk.Button(
+            master=button_frame,
+            text="Reveal",
+            bg=BUTTON_COLOR,
+            fg=TEXT_COLOR,
+            command=self._reveal_target
+        ).pack(side="left", padx=5)
+
+        self._build_history()
+
+        self._root.update_idletasks()
+        self._root.minsize(self._root.winfo_reqwidth(), self._root.winfo_reqheight())
+
+    def _build_history(
+        self
+    ) -> None:
+        history_frame = tk.Frame(
+            master=self._root,
+            bg=BG_COLOR
+        )
+        history_frame.pack(padx=10, pady=5, expand=True, fill="both")
+
+        self._history_table = ttk.Treeview(
+            master=history_frame,
+            columns=("number", "name", "target", "guess", "points", "average"),
+            show="headings"
+        )
+
+        self._history_table.heading("number", text="#")
+        self._history_table.heading("name", text="Name")
+        self._history_table.heading("target", text="Target")
+        self._history_table.heading("guess", text="Guess")
+        self._history_table.heading("points", text="Points")
+        self._history_table.heading("average", text="Average")
+
+        self._history_table.column("number", width=40, minwidth=40, stretch=False)
+        self._history_table.column("name", width=150, minwidth=150, stretch=True)
+        self._history_table.column("target", width=70, minwidth=70, stretch=False)
+        self._history_table.column("guess", width=70, minwidth=70, stretch=False)
+        self._history_table.column("points", width=60, minwidth=60, stretch=False, anchor="e")
+        self._history_table.column("average", width=60, minwidth=60, stretch=False, anchor="e")
+        self._history_table.pack(side="left", expand=True, fill="both", pady=5)
+
+        scrollbar = ttk.Scrollbar(
+            master=history_frame,
+            orient="vertical",
+            command=self._history_table.yview,
+        )
+        scrollbar.pack(side="left", fill="y", padx=5, pady=5)
+        self._history_table.configure(yscrollcommand=scrollbar.set)
+
+    def _reveal_target(
+        self
+    ) -> None:
+        if not self._guess_color_hex:
             messagebox.showinfo("Color", "No color selected. Select a color first.")
             return
 
-        #disable buttons
-        self.main_window.guess_panel.disable_buttons()
+        self._evaluate_guess()
+        self._create_history_entry()
+        self._show_result_window()
 
-        #evaluate similarity between the two colors
-        similarity = evaluate_similarity(self.target_color_hex, self.guessed_color_hex)
-        adjective = score_to_adjective(similarity)
+    def _evaluate_guess(
+        self
+    ) -> None:
+        score = evaluate_color_similarity(self._target_color_hex, self._guess_color_hex)
+        self._guess_feedback = score_to_adjective(score) + " guess!"
+        self._guess_count += 1
+        self._guess_points = int(score * 100)
+        self._total_points += self._guess_points
 
-        #convert score (0.0 - 1.0) to points (0 - 100)
-        points = int(similarity * 100)
-
-        #create entry to points history
-        self.point_history.append(points)
-        guess_count = len(self.point_history)
-        guess_sum = sum(self.point_history)
-
-        #add entry to history
-        self.main_window.history_panel.append_entry(
-            guess_count,
-            self.target_color_name,
-            self.target_color_hex,
-            self.guessed_color_hex,
-            points,
-            int(guess_sum / guess_count)
+    def _create_history_entry(
+        self
+    ) -> None:
+        self._history_table.insert(
+            "", "end",
+            values=(
+                self._guess_count,
+                self._target_color_name,
+                self._target_color_hex,
+                self._guess_color_hex,
+                self._guess_points,
+                int(self._total_points / self._guess_count)
+            )
         )
 
-        #create a new result window
-        self.result_window_top = tk.Toplevel()
+    def _show_result_window(
+        self
+    ) -> None:
+        root_x, root_y = self._root.winfo_x(), self._root.winfo_y()
+        x_offset, y_offset = 300, 0
 
-        #reset game if result window is closed
-        self.result_window_top.protocol("WM_DELETE_WINDOW", self.reset_game)
+        self._result_window = tk.Toplevel(
+            master=self._root,
+            bg=BG_COLOR
+        )
+        self._result_window.grab_set()
+        self._result_window.geometry(f"+{root_x + x_offset}+{root_y + y_offset}")
+        self._result_window.protocol("WM_DELETE_WINDOW", self._reset_game)
+        force_dark_title_bar(window=self._result_window)
 
-        #build UI
-        result_window = ResultWindow(self.result_window_top, self.style, self.reset_game)
-        result_window.heading.config(text=f"{int(similarity * 100)}/100 points")
-        result_window.feedback_label.config(text=f"{adjective} guess!")
-        result_window.target_color_label.config(text=f"Here's what the color \"{self.target_color_name}\" actually looks like:")
-        result_window.update_preview(self.target_color_hex)
+        tk.Label(
+            master=self._result_window,
+            text=f"{self._guess_points} / 100 points",
+            bg=BG_COLOR,
+            fg=TEXT_COLOR
+        ).pack(pady=5)
 
-    def reset_game(self):
-        #destroy result window
-        if self.result_window_top:
-            self.result_window_top.destroy()
-            self.result_window_top = None
+        tk.Label(
+            master=self._result_window,
+            text=self._guess_feedback,
+            bg=BG_COLOR,
+            fg=TEXT_COLOR
+        ).pack()
 
-        #reset model
-        self.guessed_color_hex = None
-        self.draw_next_target_color()
+        tk.Label(
+            master=self._result_window,
+            text=f"Here's what the color \"{self._target_color_name}\" actually looks like:",
+            bg=BG_COLOR,
+            fg=TEXT_COLOR
+        ).pack(padx=5)
 
-        #reset UI
-        self.main_window.guess_panel.target_color_label.config(text=self.target_color_name)
-        self.main_window.guess_panel.update_preview(BACKGROUND_COLOR)
-        self.main_window.guess_panel.enable_buttons()
-
-if __name__ == "__main__":
-    root = tk.Tk()
-    ColorGuesser(root)
-    root.mainloop()
+        tk.Frame(
+            master=self._result_window,
+            width=350,
+            height=350,
+            bg=self._target_color_hex,
+            highlightbackground=PREVIEW_BORDER_COLOR,
+            highlightthickness=1
+        ).pack(padx=15, pady=15)
